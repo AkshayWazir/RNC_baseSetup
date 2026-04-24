@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sampleApi } from '../api/sample';
 import { useEffect } from 'react';
 import ReactNativeBiometrics from 'react-native-biometrics'
+import { makeRequest } from '../utility/apiCaller';
 
 const styles = StyleSheet.create({
     container: {
@@ -37,9 +38,14 @@ export function HomeScreen({ navigation }: { navigation: any }) {
     const containerStyles = [styles.container, { paddingTop: safeAreaInsets.top, paddingBottom: safeAreaInsets.bottom }];
     const { data, isLoading } = sampleApi();
 
+
     useEffect(() => {
         console.log("initiated");
-    }, [])
+        (async () => {
+            const response = await makeRequest({ url: "https://jsonplaceholder.typicode.com/users", absoluteURL: true }).get();
+            console.log("Response : ", response);
+        })();
+    }, []);
 
     useEffect(() => {
         console.log("Data : ", data);
@@ -61,7 +67,6 @@ export function HomeScreen({ navigation }: { navigation: any }) {
                 <Text style={styles.previewTitle}>{JSON.stringify(data)}</Text>
                 <Text style={styles.previewTitle}>{JSON.stringify(isLoading)}</Text>
             </View>
-
         </View>
     );
 }

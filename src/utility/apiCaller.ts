@@ -1,5 +1,5 @@
 import CONSTANTS from "../config/environment";
-import { FetchOptions, iMakeRequestPayload } from "./types";
+import { FetchOptions, iFetchResponse, iMakeRequestPayload } from "./types";
 
 let tokenRefreshActive: Promise<boolean> | null = null;
 
@@ -13,7 +13,7 @@ function fetchActiveToken(): Promise<string | null> {
     return new Promise((resolve) => setTimeout(() => resolve("newly_refreshed_token"), 1000));
 }
 
-export async function httpRequest<B, R>(url: string, options: FetchOptions = {}, body?: B): Promise<R> {
+export async function httpRequest<B, R>(url: string, options: FetchOptions = {}, body?: B): Promise<iFetchResponse<R>> {
     const { method = "GET", headers = {}, query, timeout } = options;
 
     const urlObj = new URL(url);
@@ -27,12 +27,14 @@ export async function httpRequest<B, R>(url: string, options: FetchOptions = {},
     try {
         const res = await fetch(urlObj.toString(), { method, headers, body: requestBody, signal: controller.signal, keepalive: false });
         const contentType = res.headers.get("content-type");
-        let data;
+        let data: R[] = [];
 
-        if (contentType?.includes("application/json")) data = await res.json();
-        else data = await res.text();
+        if (contentType?.includes("application/json")) data.push(await res.json());
+        else throw new Error("Unsupported content type: " + contentType);
 
-        return { ok: res.ok, status: res.status, headers: res.headers, data } as R;
+        return { ok: res.ok, status: res.status, data: data[0] };
+    } catch (error) {
+        throw new Error("Failed to fetch data");
     } finally {
         if (timeoutId) clearTimeout(timeoutId);
     }
@@ -55,15 +57,15 @@ export function makeRequest<R, B>(payload: iMakeRequestPayload<B>) {
     const finalConfig: FetchOptions = genConfig(payload.token);
     const url = payload.absoluteURL ? payload.url : `${CONSTANTS.BASE_URL}${payload.url}`;
     return {
-        get: (): Promise<R> => httpRequest(url, finalConfig),
-        put: (): Promise<R> => httpRequest(url, finalConfig, payload.body),
-        post: (): Promise<R> => httpRequest(url, finalConfig, payload.body),
-        delete: (): Promise<R> => httpRequest(url, finalConfig),
+        get: (): Promise<iFetchResponse<R>> => httpRequest(url, finalConfig),
+        put: (): Promise<iFetchResponse<R>> => httpRequest(url, finalConfig, payload.body),
+        post: (): Promise<iFetchResponse<R>> => httpRequest(url, finalConfig, payload.body),
+        delete: (): Promise<iFetchResponse<R>> => httpRequest(url, finalConfig),
     };
 }
 
 export const swrFetcher = async ([url, options]: [string, any]) => {
-    const res = await httpRequest<any, any>(url, options);
+    const res = await apiCaller<any, any>({ url, absoluteURL: options.absoluteURL });
     if (!res.ok) throw new Error(res?.data?.message || "Request failed");
     return res.data;
 };
@@ -72,38 +74,40 @@ export function getSWRKey(payload: iMakeRequestPayload<any>) {
     return [payload.url, { method: payload.options?.method || "GET", query: payload.options?.query, token: payload.token }];
 }
 
-// async function apiCaller<R, B>(apiPayload: iMakeRequestPayload<B>): Promise<R> {
-//     return await apiCallProcessor<R, B>(apiPayload);
-// }
+async function apiCaller<R, B>(apiPayload: iMakeRequestPayload<B>): Promise<iFetchResponse<R>> {
+    return await apiCallProcessor<R, B>(apiPayload);
+}
 
-// async function apiCallProcessor<R, B>(apiPayload: iMakeRequestPayload<B>): Promise<R> {
-//     let i = 0, response: R;
-//     while (i < 3) {
-//         try {
-//             switch (apiPayload.options?.method?.toUpperCase() || "GET") {
-//                 case "GET":
-//                     response = await makeRequest(apiPayload).get();
-//                     break;
-//                 case "POST":
-//                     response = await makeRequest(apiPayload).post();
-//                     break;
-//                 case "DELETE":
-//                     response = await makeRequest(apiPayload).delete();
-//                     break;
-//                 case "PUT":
-//                     response = await makeRequest(apiPayload).put();
-//                     break;
-//             }
-//         } catch (error: unknown) {
-//             return {};
-//         }
-//         if (response?.status === 401) {
-//             await refreshTokenOnce();
-//             i++;
-//             continue;
-//         } else return response !== null ? response : Promise.reject("No response from server");
-//     }
-//     return response !== null ? response : Promise.reject("No response from server");
-// }
+async function apiCallProcessor<R, B>(apiPayload: iMakeRequestPayload<B>): Promise<iFetchResponse<R>> {
+    let i = 0, response: iFetchResponse<R> = {} as iFetchResponse<R>;
+    while (i < 3) {
+        try {
+            switch (apiPayload.options?.method?.toUpperCase() || "GET") {
+                case "GET":
+                    response = await makeRequest<R, B>(apiPayload).get();
+                    break;
+                case "POST":
+                    response = await makeRequest<R, B>(apiPayload).post();
+                    break;
+                case "DELETE":
+                    response = await makeRequest<R, B>(apiPayload).delete();
+                    break;
+                case "PUT":
+                    response = await makeRequest<R, B>(apiPayload).put();
+                    break;
+                default:
+                    response = { data: null, ok: false, status: 500 } as iFetchResponse<R>;
+            }
+        } catch (error: unknown) {
+            response = { data: null, ok: false, status: 500 } as iFetchResponse<R>;
+        }
+        if (response.status === 401) {
+            await refreshTokenOnce();
+            i++;
+            continue;
+        } else return response !== null ? response : Promise.reject("No response from server");
+    }
+    return response !== null ? response : Promise.reject("No response from server");
+}
 
-// export { apiCaller, apiCallProcessor };
+export { apiCaller, apiCallProcessor };

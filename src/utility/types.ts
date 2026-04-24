@@ -34,3 +34,9 @@ export type iMakeRequestPayload<B> = {
     options?: FetchOptions;
     authorized?: boolean;
 }
+
+export interface iFetchResponse<R> {
+    status: number;
+    data: R;
+    ok: boolean;
+}
