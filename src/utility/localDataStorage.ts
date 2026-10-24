@@ -1,11 +1,9 @@
-import { createAsyncStorage } from "@react-native-async-storage/async-storage";
-
-const storage = createAsyncStorage("appDB");
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const NativeDataStorage = {
-    setItem: async (key: string, value: string) => await storage.setItem(key, value),
-    getItem: async (key: string) => await storage.getItem(key),
-    removeItem: async (key: string) => await storage.removeItem(key),
+    setItem: async (key: string, value: string) => await AsyncStorage.setItem(key, value),
+    getItem: async (key: string) => await AsyncStorage.getItem(key),
+    removeItem: async (key: string) => await AsyncStorage.removeItem(key),
 }
 
 export default NativeDataStorage;
